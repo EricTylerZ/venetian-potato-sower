@@ -44,7 +44,7 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
             "timestamp": datetime.now().isoformat()
         }
         blob_path = f"api_logs/{task_id}/potato_{chunk_num}.json"
-        put(blob_path, json.dumps(api_data))  # No token needed in Vercel runtime
+        put(blob_path, json.dumps(api_data))
         return f"Potato {chunk_num}: Done\n{result}\n\n"
     except Exception as e:
         error_msg = f"Potato {chunk_num}: Error - {str(e)}\n\n"
@@ -96,8 +96,6 @@ def index():
             cost_per_token = 0.0001  # Placeholder
             estimated_cost = total_tokens * cost_per_token
             estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} to run this, with an estimated cost of ${estimated_cost:.2f}"
-            return render_template("index.html", models=model_ids, default_model=default_model, 
-                                 estimate=estimate, filename=filename)
         
         elif action == "process":
             task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -114,7 +112,7 @@ def index():
                     yield result
                     time.sleep(0.1)  # Small delay for streaming effect
                 session_data["results"][task_id]["status"] = "complete"
-                yield f"\nMashing complete! Download available.\n"
+                yield f"\nMashing complete! Task ID: {task_id}\n"
             
             return Response(stream_with_context(generate()), mimetype="text/plain")
 

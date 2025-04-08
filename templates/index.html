@@ -13,7 +13,7 @@
         <input type="file" id="file" name="file" accept=".csv,.txt"><br>
         <input type="hidden" name="filename" value="{{ filename }}">
         <label for="prompt">Analysis Prompt:</label>
-        <textarea id="prompt" name="prompt" rows="4" cols="50" placeholder="e.g., Parse this file and list every time the word 'Eric' is used...">{{ request.form.get('prompt', '') }}</textarea><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50" placeholder="e.g., Parse this file and list every sentence that discusses potatoes or venice.ai...">{{ request.form.get('prompt', '') }}</textarea><br>
         <label for="model">Select Model:</label>
         <select id="model" name="model">
             {% for model in models %}
@@ -21,7 +21,7 @@
             {% endfor %}
         </select><br>
         <button type="submit" name="action" value="estimate">Estimate Cost</button>
-        <button type="submit" name="action" value="process" onclick="startProcessing()">Process</button>
+        <button type="submit" name="action" value="process" onclick="startProcessing(event)">Process</button>
         {% if estimate %}
         <p>{{ estimate }}</p>
         {% endif %}
@@ -29,16 +29,20 @@
         <a href="/download" id="download-link" style="display:none;">Download Result</a>
     </form>
     <script>
-        function startProcessing() {
+        function startProcessing(event) {
             event.preventDefault();
             const form = document.getElementById('process-form');
             const log = document.getElementById('log');
             const downloadLink = document.getElementById('download-link');
             log.textContent = "Processing started...\n";
+            downloadLink.style.display = 'none';  // Hide until complete
             fetch('/?action=process', {
                 method: 'POST',
                 body: new FormData(form)
             }).then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 function read() {
@@ -47,13 +51,13 @@
                             downloadLink.style.display = 'inline';
                             return;
                         }
-                        log.textContent += decoder.decode(value);
+                        log.textContent += decoder.decode(value, { stream: true });
                         log.scrollTop = log.scrollHeight;
                         read();
-                    });
+                    }).catch(err => log.textContent += `Error: ${err}\n`);
                 }
                 read();
-            }).catch(err => log.textContent += `Error: ${err}\n`);
+            }).catch(err => log.textContent += `Fetch Error: ${err}\n`);
         }
     </script>
 </body>
