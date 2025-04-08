@@ -5,7 +5,6 @@ from flask import Flask, render_template, request, Response, stream_with_context
 from openai import OpenAI
 from dotenv import load_dotenv
 from datetime import datetime
-from vercel_blob import put
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("VENICE_API_KEY"), base_url="https://api.venice.ai/api/v1")
@@ -13,7 +12,11 @@ client = OpenAI(api_key=os.getenv("VENICE_API_KEY"), base_url="https://api.venic
 app = Flask(__name__)
 
 # In-memory session data (Vercel is stateless)
-session_data = {"file_content": None, "filename": None, "task_id": None, "results": {}}
+session_data = {"file_content": None, "task_id": None, "results": {}, "filename": None}
+
+# Create logs folder if it doesn't exist
+if not os.path.exists("logs/sunshine"):
+    os.makedirs("logs/sunshine")
 
 # Load models from models.json
 def load_models():
@@ -29,6 +32,15 @@ def get_model_info(model_id, models):
 
 def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
     try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        request_data = {
+            "model": model_id,
+            "prompt": prompt,
+            "chunk": chunk
+        }
+        with open(f"logs/sunshine/{timestamp}_venice_request.json", "w") as f:
+            json.dump(request_data, f)
+        
         response = client.chat.completions.create(
             model=model_id,
             messages=[
@@ -38,115 +50,84 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
             temperature=0.3
         )
         result = response.choices[0].message.content
-        api_data = {
-            "request": {"model": model_id, "prompt": prompt, "chunk": chunk},
-            "response": result,
-            "timestamp": datetime.now().isoformat()
+        
+        response_data = {
+            "response": result
         }
-        blob_path = f"api_logs/{task_id}/potato_{chunk_num}.json"
-        put(blob_path, json.dumps(api_data))
+        with open(f"logs/sunshine/{timestamp}_venice_response.json", "w") as f:
+            json.dump(response_data, f)
+        
         return f"Potato {chunk_num}: Done\n{result}\n\n"
     except Exception as e:
         error_msg = f"Potato {chunk_num}: Error - {str(e)}\n\n"
-        api_data = {
-            "request": {"model": model_id, "prompt": prompt, "chunk": chunk},
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        error_data = {
+            "error": str(e)
         }
-        blob_path = f"api_logs/{task_id}/potato_{chunk_num}_error.json"
-        put(blob_path, json.dumps(api_data))
+        with open(f"logs/sunshine/{timestamp}_venice_error.json", "w") as f:
+            json.dump(error_data, f)
         return error_msg
 
-@app.route("/", methods=["GET"])
+@app.route("/", methods=["GET", "POST"])
 def index():
     models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
     model_ids = [m["id"] for m in models]
     default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
-    filename = session_data["filename"] if session_data["filename"] else "No file chosen"
-    return render_template("index.html", models=model_ids, default_model=default_model, 
-                         estimate=None, filename=filename)
+    
+    estimate = None
+    
+    if request.method == "POST":
+        action = request.form.get("action")
+        file = request.files.get("file")
+        prompt = request.form.get("prompt", "")
+        model_id = request.form.get("model", default_model)
+        
+        if file:
+            session_data["file_content"] = file.read().decode("utf-8")
+            session_data["filename"] = file.filename
+        
+        chat_text = session_data["file_content"]
+        if not chat_text:
+            return render_template("index.html", models=model_ids, default_model=default_model, 
+                                 estimate="No file uploaded yet", filename=session_data["filename"])
+        
+        model_info = get_model_info(model_id, models)
+        if not model_info:
+            return render_template("index.html", models=model_ids, default_model=default_model, 
+                                 estimate="Invalid model", filename=session_data["filename"])
+        
+        file_size = len(chat_text)
+        context_tokens = model_info["context_tokens"]
+        chunk_size = int((context_tokens * 0.8 - 150) * 4)  # 150 tokens for prompt
+        num_chunks = (file_size + chunk_size - 1) // chunk_size
+        
+        if action == "estimate":
+            total_tokens = file_size // 4 + num_chunks * 150
+            cost_per_token = 0.0001  # Placeholder
+            estimated_cost = total_tokens * cost_per_token
+            estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} to run this, with an estimated cost of ${estimated_cost:.2f}"
+        
+        elif action == "process":
+            task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            session_data["task_id"] = task_id
+            session_data["results"][task_id] = {"status": "running", "output": ""}
+            
+            def generate():
+                yield f"Starting to plant {num_chunks} potato{'s' if num_chunks != 1 else ''}...\n\n"
+                chunks = [chat_text[i:i+chunk_size] for i in range(0, len(chat_text), chunk_size)]
+                for i, chunk in enumerate(chunks, 1):
+                    yield f"Planting potato {i} of {num_chunks}...\n"
+                    result = process_chunk(chunk, prompt, model_id, i, num_chunks, task_id)
+                    session_data["results"][task_id]["output"] += result
+                    yield result
+                    time.sleep(0.1)  # Small delay for streaming effect
+                session_data["results"][task_id]["status"] = "complete"
+                yield f"\nMashing complete! Task ID: {task_id}\n"
+            
+            return Response(stream_with_context(generate()), mimetype="text/plain")
 
-@app.route("/estimate", methods=["POST"])
-def estimate():
-    models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
-    model_ids = [m["id"] for m in models]
-    default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
-    
-    file = request.files.get("file")
-    prompt = request.form.get("prompt", "")
-    model_id = request.form.get("model", default_model)
-    
-    if file:
-        session_data["file_content"] = file.read().decode("utf-8")
-        session_data["filename"] = file.filename
-    
-    chat_text = session_data["file_content"]
-    if not chat_text:
-        return render_template("index.html", models=model_ids, default_model=default_model, 
-                             estimate="No file uploaded yet", filename="No file chosen")
-    
-    model_info = get_model_info(model_id, models)
-    if not model_info:
-        return render_template("index.html", models=model_ids, default_model=default_model, 
-                             estimate="Invalid model", filename=session_data["filename"])
-    
-    file_size = len(chat_text)
-    context_tokens = model_info["context_tokens"]
-    chunk_size = int((context_tokens * 0.8 - 150) * 4)
-    num_chunks = (file_size + chunk_size - 1) // chunk_size
-    
-    total_tokens = file_size // 4 + num_chunks * 150
-    cost_per_token = 0.0001  # Placeholder
-    estimated_cost = total_tokens * cost_per_token
-    estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} to run this, with an estimated cost of ${estimated_cost:.2f}"
-    
     return render_template("index.html", models=model_ids, default_model=default_model, 
-                         estimate=estimate, filename=session_data["filename"], prompt=prompt)
-
-@app.route("/process", methods=["POST"])
-def process():
-    models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
-    model_ids = [m["id"] for m in models]
-    default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
-    
-    file = request.files.get("file")
-    prompt = request.form.get("prompt", "")
-    model_id = request.form.get("model", default_model)
-    
-    if file:
-        session_data["file_content"] = file.read().decode("utf-8")
-        session_data["filename"] = file.filename
-    
-    chat_text = session_data["file_content"]
-    if not chat_text:
-        return "No file uploaded yet", 400
-    
-    model_info = get_model_info(model_id, models)
-    if not model_info:
-        return "Invalid model", 400
-    
-    file_size = len(chat_text)
-    context_tokens = model_info["context_tokens"]
-    chunk_size = int((context_tokens * 0.8 - 150) * 4)
-    num_chunks = (file_size + chunk_size - 1) // chunk_size
-    
-    task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_data["task_id"] = task_id
-    session_data["results"][task_id] = {"status": "running", "output": ""}
-    
-    def generate():
-        yield f"Starting to plant {num_chunks} potato{'s' if num_chunks != 1 else ''}...\n\n"
-        chunks = [chat_text[i:i+chunk_size] for i in range(0, len(chat_text), chunk_size)]
-        for i, chunk in enumerate(chunks, 1):
-            yield f"Planting potato {i} of {num_chunks}...\n"
-            result = process_chunk(chunk, prompt, model_id, i, num_chunks, task_id)
-            session_data["results"][task_id]["output"] += result
-            yield result
-            time.sleep(0.1)  # Small delay for streaming effect
-        session_data["results"][task_id]["status"] = "complete"
-        yield f"\nMashing complete! Task ID: {task_id}\n"
-    
-    return Response(stream_with_context(generate()), mimetype="text/plain")
+                         estimate=estimate, filename=session_data["filename"])
 
 @app.route("/download")
 def download():
