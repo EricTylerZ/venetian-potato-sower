@@ -10,3 +10,6 @@ texts-to-paste
 
 #output file
 output.txt
+
+#logs
+logs/
