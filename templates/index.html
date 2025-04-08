@@ -21,8 +21,11 @@
             <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
             {% endfor %}
         </select><br>
+        <label for="max_output_tokens">Max Output Tokens (per chunk):</label>
+        <input type="number" id="max_output_tokens" name="max_output_tokens" value="{{ max_output_tokens if max_output_tokens else 3337 }}" min="100" max="{{ max_context_tokens if max_context_tokens else 131072 }}"><br>
         <button type="submit" formaction="/estimate" name="action" value="estimate">Estimate Cost</button>
         <button type="submit" formaction="/process" name="action" value="process" onclick="startProcessing(event)">Process</button>
+        <button type="button" onclick="stopProcessing()" id="stop-button" style="display:none;">Stop</button>
         {% if estimate %}
         <p>{{ estimate }}</p>
         {% endif %}
@@ -35,8 +38,10 @@
             const form = document.getElementById('process-form');
             const log = document.getElementById('log');
             const downloadLink = document.getElementById('download-link');
+            const stopButton = document.getElementById('stop-button');
             log.textContent = "Processing started...\n";
             downloadLink.style.display = 'none';
+            stopButton.style.display = 'inline';
             fetch('/process', {
                 method: 'POST',
                 body: new FormData(form)
@@ -50,15 +55,28 @@
                     reader.read().then(({ done, value }) => {
                         if (done) {
                             downloadLink.style.display = 'inline';
+                            stopButton.style.display = 'none';
                             return;
                         }
                         log.textContent += decoder.decode(value, { stream: true });
                         log.scrollTop = log.scrollHeight;
                         read();
-                    }).catch(err => log.textContent += `Error: ${err}\n`);
+                    }).catch(err => {
+                        log.textContent += `Error: ${err}\n`;
+                        stopButton.style.display = 'none';
+                    });
                 }
                 read();
-            }).catch(err => log.textContent += `Fetch Error: ${err}\n`);
+            }).catch(err => {
+                log.textContent += `Fetch Error: ${err}\n`;
+                stopButton.style.display = 'none';
+            });
+        }
+        function stopProcessing() {
+            fetch('/stop', { method: 'POST' })
+                .then(response => response.text())
+                .then(text => console.log(text))
+                .catch(err => console.error('Stop Error:', err));
         }
         function clearFile() {
             document.getElementById('file').style.display = 'inline';
