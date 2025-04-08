@@ -1,7 +1,8 @@
 body {
-    font-family: 'Georgia', serif;
+    font-family: 'Century Schoolbook', serif;
     color: #00918b;
 }
-h1, label, p, button {
+h1, label, p, button, a {
     color: #00918b;
+    font-family: 'Century Schoolbook', serif;
 }

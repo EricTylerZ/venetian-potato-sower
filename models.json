@@ -1,0 +1,399 @@
+{
+  "models": [
+    {
+      "id": "llama-3.2-3b",
+      "created": 1727966436,
+      "owned_by": "venice.ai",
+      "context_tokens": 131072,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 131072,
+          "capabilities": {
+            "quantization": "fp16",
+            "optimizedForCode": false,
+            "supportsVision": false,
+            "supportsFunctionCalling": true,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": false,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "fastest"
+          ],
+          "modelSource": "https://huggingface.co/meta-llama/Llama-3.2-3B"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "llama-3.3-70b",
+      "created": 1733768349,
+      "owned_by": "venice.ai",
+      "context_tokens": 65536,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 65536,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": false,
+            "supportsVision": false,
+            "supportsFunctionCalling": true,
+            "supportsResponseSchema": false,
+            "supportsWebSearch": true,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "function_calling_default",
+            "default"
+          ],
+          "modelSource": "https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "llama-3.1-405b",
+      "created": 1730396371,
+      "owned_by": "venice.ai",
+      "context_tokens": 65536,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 65536,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": false,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": false,
+            "supportsWebSearch": true,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "most_intelligent"
+          ],
+          "modelSource": "https://huggingface.co/meta-llama/Meta-Llama-3.1-405B-Instruct"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "mistral-31-24b",
+      "created": 1742262554,
+      "owned_by": "venice.ai",
+      "context_tokens": 131072,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 131072,
+          "capabilities": {
+            "quantization": "fp16",
+            "optimizedForCode": false,
+            "supportsVision": true,
+            "supportsFunctionCalling": true,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": true,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.15
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "default_vision"
+          ],
+          "modelSource": "https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "qwen-2.5-qwq-32b",
+      "created": 1741218077,
+      "owned_by": "venice.ai",
+      "context_tokens": 32768,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 32768,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": true,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": true,
+            "supportsReasoning": true
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.6
+            },
+            "top_p": {
+              "default": 0.95
+            }
+          },
+          "offline": false,
+          "traits": [],
+          "modelSource": "https://huggingface.co/Qwen/QwQ-32B"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "qwen-2.5-vl",
+      "created": 1739074852,
+      "owned_by": "venice.ai",
+      "context_tokens": 32768,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 32768,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": false,
+            "supportsVision": true,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": true,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [],
+          "modelSource": "https://huggingface.co/Qwen/Qwen2.5-VL-72B-Instruct"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "dolphin-2.9.2-qwen2-72b",
+      "created": 1726869022,
+      "owned_by": "venice.ai",
+      "context_tokens": 32768,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 32768,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": false,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": true,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.5
+            },
+            "top_p": {
+              "default": 1
+            }
+          },
+          "offline": false,
+          "traits": [
+            "most_uncensored"
+          ],
+          "modelSource": "https://huggingface.co/cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "deepseek-r1-671b",
+      "created": 1738690625,
+      "owned_by": "venice.ai",
+      "context_tokens": 131072,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 131072,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": true,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": false,
+            "supportsWebSearch": true,
+            "supportsReasoning": true
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.6
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "default_reasoning"
+          ],
+          "modelSource": "https://huggingface.co/deepseek-ai/DeepSeek-R1"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "qwen-2.5-coder-32b",
+      "created": 1731628653,
+      "owned_by": "venice.ai",
+      "context_tokens": 32768,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 32768,
+          "capabilities": {
+            "quantization": "fp8",
+            "optimizedForCode": true,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": false,
+            "supportsWebSearch": false,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [
+            "default_code"
+          ],
+          "modelSource": "https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF"
+        }
+      },
+      "object": "model"
+    },
+    {
+      "id": "deepseek-coder-v2-lite",
+      "created": 1740253117,
+      "owned_by": "venice.ai",
+      "context_tokens": 131072,
+      "model_computed_fields": {},
+      "model_config": {
+        "extra": "allow",
+        "defer_build": true
+      },
+      "model_extra": {
+        "type": "text",
+        "model_spec": {
+          "availableContextTokens": 131072,
+          "capabilities": {
+            "quantization": "fp16",
+            "optimizedForCode": true,
+            "supportsVision": false,
+            "supportsFunctionCalling": false,
+            "supportsResponseSchema": true,
+            "supportsWebSearch": false,
+            "supportsReasoning": false
+          },
+          "constraints": {
+            "temperature": {
+              "default": 0.8
+            },
+            "top_p": {
+              "default": 0.9
+            }
+          },
+          "offline": false,
+          "traits": [],
+          "modelSource": "https://huggingface.co/deepseek-ai/deepseek-coder-v2-lite-Instruct"
+        }
+      },
+      "object": "model"
+    }
+  ]
+}

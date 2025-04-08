@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Venetian Potatoes Sower</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Venetian Potato Sower</title>
+    <link href="https://fonts.googleapis.com/css2?family=Schoolbell&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <h1>Venetian Potatoes Sower</h1>
-    <form id="upload-form" method="post" enctype="multipart/form-data" action="/process">
+    <h1>Venetian Potato Sower</h1>
+    <form id="upload-form" method="post" enctype="multipart/form-data">
         <label for="file">Upload CSV or .txt file:</label>
         <input type="file" id="file" name="file" accept=".csv,.txt"><br>
         <label for="prompt">Analysis Prompt:</label>
@@ -15,13 +16,45 @@
         <label for="model">Select Model:</label>
         <select id="model" name="model">
             {% for model in models %}
-            <option value="{{ model }}">{{ model }}</option>
+            <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
             {% endfor %}
         </select><br>
         <button type="button" onclick="estimateCost()">Estimate Cost</button>
         <p id="estimate"></p>
-        <button type="submit" id="confirm" style="display:none;">Confirm and Process</button>
+        <button type="submit" formaction="/process">Process</button>
+        <a href="/download" id="download" style="display:none;">Download Result</a>
     </form>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        function estimateCost() {
+            const form = document.getElementById('upload-form');
+            const estimateP = document.getElementById('estimate');
+            const file = document.getElementById('file').files[0];
+            const model = document.getElementById('model').value;
+            if (!file) {
+                estimateP.textContent = "Please select a file.";
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('model', model);
+            fetch('/estimate', { method: 'POST', body: formData })
+                .then(response => response.text())
+                .then(text => estimateP.textContent = text)
+                .catch(err => estimateP.textContent = "Error estimating cost.");
+        }
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            if (e.submitter.formAction.endsWith('/process')) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                fetch('/process', { method: 'POST', body: formData })
+                    .then(response => response.text())
+                    .then(text => {
+                        document.getElementById('estimate').textContent = text;
+                        document.getElementById('download').style.display = 'inline';
+                    })
+                    .catch(err => document.getElementById('estimate').textContent = "Error processing file.");
+            }
+        });
+    </script>
 </body>
 </html>

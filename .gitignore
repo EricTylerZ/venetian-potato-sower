@@ -2,6 +2,11 @@
 venv/
 myenv/
 __pycache__/
+*.pyc
+
 
 #internal tools for convenience, uncessesary for github
 texts-to-paste 
+
+#output file
+output.txt
