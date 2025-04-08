@@ -12,7 +12,7 @@ client = OpenAI(api_key=os.getenv("VENICE_API_KEY"), base_url="https://api.venic
 app = Flask(__name__)
 
 # In-memory session data
-session_data = {"file_content": None, "filename": None, "task_id": None, "results": {}}
+session_data = {"file_content": None, "filename": None, "task_id": None, "results": {}, "selected_model": None}
 
 # Ensure logs/sunshine directory exists
 LOG_DIR = "logs/sunshine"
@@ -30,7 +30,11 @@ def get_model_info(model_id, models):
             return model
     return None
 
-def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
+def estimate_tokens(text):
+    # Rough estimate: 1 token ≈ 4 characters
+    return len(text) // 4
+
+def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max_context_tokens):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     request_data = {
         "model": model_id,
@@ -41,14 +45,13 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
         "temperature": 0.3,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "timestamp": datetime.now().isoformat()  # For logging only, not API
+        "timestamp": datetime.now().isoformat()  # For logging only
     }
     request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
     with open(request_file, "w", encoding="utf-8") as f:
         json.dump(request_data, f, indent=2)
     
     try:
-        # Only pass valid API parameters
         response = client.chat.completions.create(
             model=model_id,
             messages=request_data["messages"],
@@ -56,28 +59,26 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
             stream=True,
             stream_options={"include_usage": True}
         )
-        buffer = ""
         full_response = ""
         usage = None
+        first_chunk = True
         
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
-                buffer += content
                 full_response += content
-                if any(buffer.endswith(punct) for punct in [".", "!", "?"]):  # Buffer until sentence end
-                    yield f"Potato {chunk_num}: Streaming...\n{buffer.strip()}\n"
-                    buffer = ""
+                if first_chunk:
+                    yield f"Potato {chunk_num}: Growing...\n{content}"
+                    first_chunk = False
+                else:
+                    yield content
             if hasattr(chunk, "usage") and chunk.usage:  # Final chunk with usage
                 usage = {
                     "prompt_tokens": chunk.usage.prompt_tokens,
                     "completion_tokens": chunk.usage.completion_tokens,
                     "total_tokens": chunk.usage.total_tokens
                 }
-        if buffer:  # Yield remaining buffer
-            yield f"Potato {chunk_num}: Streaming...\n{buffer.strip()}\n"
-        
-        yield f"Potato {chunk_num}: Done\n{full_response}\n\n"
+        yield f"\nPotato {chunk_num}: Done\n\n"
         
         response_data = {
             "id": chunk.id if hasattr(chunk, "id") else "unknown",
@@ -120,6 +121,7 @@ def estimate():
     file = request.files.get("file")
     prompt = request.form.get("prompt", "")
     model_id = request.form.get("model", default_model)
+    session_data["selected_model"] = model_id  # Store selected model
     
     if file:
         session_data["file_content"] = file.read().decode("utf-8")
@@ -136,27 +138,27 @@ def estimate():
                              estimate="Invalid model", filename=session_data["filename"])
     
     file_size = len(chat_text)
-    context_tokens = model_info["context_tokens"]
-    chunk_size = int((context_tokens * 0.8 - 150) * 4)
+    prompt_tokens = estimate_tokens(prompt)
+    max_context_tokens = model_info["context_tokens"]
+    chunk_size = max_context_tokens - (prompt_tokens + 150)  # Account for prompt and buffer
     num_chunks = (file_size + chunk_size - 1) // chunk_size
     
-    total_tokens = file_size // 4 + num_chunks * 150
+    total_tokens = (file_size // 4) + (num_chunks * (prompt_tokens + 150))  # Rough estimate including prompt
     cost_per_token = 0.0001  # Placeholder
     estimated_cost = total_tokens * cost_per_token
-    estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} costing ~${estimated_cost:.2f}"
+    estimate = f"We’ll plant {num_chunks} potato{'es' if num_chunks != 1 else ''} costing ~${estimated_cost:.2f}"
     
-    return render_template("index.html", models=model_ids, default_model=default_model, 
+    return render_template("index.html", models=model_ids, default_model=model_id, 
                          estimate=estimate, filename=session_data["filename"], prompt=prompt)
 
 @app.route("/process", methods=["POST"])
 def process():
     models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
     model_ids = [m["id"] for m in models]
-    default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
     
     file = request.files.get("file")
     prompt = request.form.get("prompt", "")
-    model_id = request.form.get("model", default_model)
+    model_id = request.form.get("model", session_data.get("selected_model", "mistral-31-24b"))
     
     if file:
         session_data["file_content"] = file.read().decode("utf-8")
@@ -171,8 +173,9 @@ def process():
         return "Invalid model", 400
     
     file_size = len(chat_text)
-    context_tokens = model_info["context_tokens"]
-    chunk_size = int((context_tokens * 0.8 - 150) * 4)
+    prompt_tokens = estimate_tokens(prompt)
+    max_context_tokens = model_info["context_tokens"]
+    chunk_size = max_context_tokens - (prompt_tokens + 150)  # Adjust for prompt and buffer
     num_chunks = (file_size + chunk_size - 1) // chunk_size
     
     task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -180,7 +183,7 @@ def process():
     session_data["results"][task_id] = {"status": "running", "output": ""}
     
     def generate():
-        output = f"Starting to plant {num_chunks} potato{'s' if num_chunks != 1 else ''}...\n\n"
+        output = f"Starting to plant {num_chunks} potato{'es' if num_chunks != 1 else ''}...\n\n"
         yield output
         session_data["results"][task_id]["output"] += output
         chunks = [chat_text[i:i+chunk_size] for i in range(0, len(chat_text), chunk_size)]
@@ -188,7 +191,7 @@ def process():
             output = f"Planting potato {i} of {num_chunks}...\n"
             yield output
             session_data["results"][task_id]["output"] += output
-            for streamed_output in process_chunk(chunk, prompt, model_id, i, num_chunks, task_id):
+            for streamed_output in process_chunk(chunk, prompt, model_id, i, num_chunks, task_id, max_context_tokens):
                 yield streamed_output
                 session_data["results"][task_id]["output"] += streamed_output
             time.sleep(0.1)  # Small delay for streaming effect
