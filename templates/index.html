@@ -8,7 +8,7 @@
 </head>
 <body>
     <h1>Venetian Potato Sower</h1>
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" id="process-form">
         <label for="file">Upload CSV or .txt file:</label>
         <input type="file" id="file" name="file" accept=".csv,.txt"><br>
         <input type="hidden" name="filename" value="{{ filename }}">
@@ -21,14 +21,40 @@
             {% endfor %}
         </select><br>
         <button type="submit" name="action" value="estimate">Estimate Cost</button>
-        <button type="submit" name="action" value="process">Process</button>
+        <button type="submit" name="action" value="process" onclick="startProcessing()">Process</button>
         {% if estimate %}
         <p>{{ estimate }}</p>
         {% endif %}
-        {% if result %}
-        <pre>{{ result }}</pre>
-        <a href="/download">Download Result</a>
-        {% endif %}
+        <pre id="log"></pre>
+        <a href="/download" id="download-link" style="display:none;">Download Result</a>
     </form>
+    <script>
+        function startProcessing() {
+            event.preventDefault();
+            const form = document.getElementById('process-form');
+            const log = document.getElementById('log');
+            const downloadLink = document.getElementById('download-link');
+            log.textContent = "Processing started...\n";
+            fetch('/?action=process', {
+                method: 'POST',
+                body: new FormData(form)
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                function read() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            downloadLink.style.display = 'inline';
+                            return;
+                        }
+                        log.textContent += decoder.decode(value);
+                        log.scrollTop = log.scrollHeight;
+                        read();
+                    });
+                }
+                read();
+            }).catch(err => log.textContent += `Error: ${err}\n`);
+        }
+    </script>
 </body>
 </html>

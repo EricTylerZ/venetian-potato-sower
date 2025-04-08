@@ -6,3 +6,9 @@ h1, label, p, button, a, pre {
     color: #00918b;
     font-family: 'Century Schoolbook', serif;
 }
+pre {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #00918b;
+    padding: 10px;
+}
