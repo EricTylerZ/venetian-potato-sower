@@ -2,7 +2,7 @@ body {
     font-family: 'Century Schoolbook', serif;
     color: #00918b;
 }
-h1, label, p, button, a {
+h1, label, p, button, a, pre {
     color: #00918b;
     font-family: 'Century Schoolbook', serif;
 }
