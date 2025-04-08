@@ -34,8 +34,11 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     request_data = {
         "model": model_id,
-        "prompt": prompt,
-        "chunk": chunk,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Potato {chunk_num}/{total_chunks}:\n{chunk}"}
+        ],
+        "temperature": 0.3,
         "timestamp": datetime.now().isoformat()
     }
     request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
@@ -45,21 +48,29 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
     try:
         response = client.chat.completions.create(
             model=model_id,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Potato {chunk_num}/{total_chunks}:\n{chunk}"}
-            ],
-            temperature=0.3
+            messages=request_data["messages"],
+            temperature=0.3,
+            stream=True  # Enable streaming for real-time responses
         )
-        result = response.choices[0].message.content
+        full_response = ""
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                yield f"Potato {chunk_num}: Streaming...\n{content}\n"
         response_data = {
-            "response": result,
+            "response": full_response,
+            "usage": {
+                "prompt_tokens": getattr(response, "usage", {}).get("prompt_tokens", "unknown"),
+                "completion_tokens": getattr(response, "usage", {}).get("completion_tokens", "unknown"),
+                "total_tokens": getattr(response, "usage", {}).get("total_tokens", "unknown")
+            },
             "timestamp": datetime.now().isoformat()
         }
         response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
         with open(response_file, "w", encoding="utf-8") as f:
             json.dump(response_data, f, indent=2)
-        return f"Potato {chunk_num}: Done\n{result}\n\n"
+        yield f"Potato {chunk_num}: Done\n{full_response}\n\n"
     except Exception as e:
         error_msg = f"Potato {chunk_num}: Error - {str(e)}\n\n"
         error_data = {
@@ -69,7 +80,7 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
         error_file = os.path.join(LOG_DIR, f"{timestamp}_venice_error.json")
         with open(error_file, "w", encoding="utf-8") as f:
             json.dump(error_data, f, indent=2)
-        return error_msg
+        yield error_msg
 
 @app.route("/", methods=["GET"])
 def index():
@@ -157,9 +168,9 @@ def process():
             output = f"Planting potato {i} of {num_chunks}...\n"
             yield output
             session_data["results"][task_id]["output"] += output
-            result = process_chunk(chunk, prompt, model_id, i, num_chunks, task_id)
-            yield result
-            session_data["results"][task_id]["output"] += result
+            for streamed_output in process_chunk(chunk, prompt, model_id, i, num_chunks, task_id):
+                yield streamed_output
+                session_data["results"][task_id]["output"] += streamed_output
             time.sleep(0.1)  # Small delay for streaming effect
         output = f"\nMashing complete! Task ID: {task_id}\n"
         yield output
