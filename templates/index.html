@@ -13,6 +13,8 @@
         <input type="file" id="file" name="file" accept=".csv,.txt" {% if filename != "No file chosen" %}style="display:none;"{% endif %}><br>
         <input type="hidden" name="filename" value="{{ filename }}">
         <p>Current file: {{ filename }} {% if filename != "No file chosen" %}<button type="button" onclick="clearFile()">Change File</button>{% endif %}</p>
+        <label for="api_key">Your Venice.ai API Key:</label>
+        <input type="password" id="api_key" name="api_key" placeholder="Paste your API key here"><br>
         <label for="prompt">Analysis Prompt:</label>
         <textarea id="prompt" name="prompt" rows="4" cols="50" placeholder="e.g., Parse this file and list every sentence that discusses potatoes or venice.ai...">{{ prompt if prompt else request.form.get('prompt', '') }}</textarea><br>
         <label for="model">Select Model:</label>
@@ -39,12 +41,17 @@
             const log = document.getElementById('log');
             const downloadLink = document.getElementById('download-link');
             const stopButton = document.getElementById('stop-button');
+            const apiKey = document.getElementById('api_key').value;
+            sessionStorage.setItem('veniceApiKey', apiKey);
             log.textContent = "Processing started...\n";
             downloadLink.style.display = 'none';
             stopButton.style.display = 'inline';
             fetch('/process', {
                 method: 'POST',
-                body: new FormData(form)
+                body: new FormData(form),
+                headers: {
+                    'X-API-Key': apiKey
+                }
             }).then(response => {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -84,6 +91,7 @@
             document.querySelector('label[for="file"]').style.display = 'inline';
             document.querySelector('button[onclick="clearFile()"]').style.display = 'none';
         }
+        document.getElementById('api_key').value = sessionStorage.getItem('veniceApiKey') || '';
     </script>
 </body>
 </html>

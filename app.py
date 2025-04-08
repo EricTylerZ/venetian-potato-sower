@@ -6,8 +6,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from datetime import datetime
 
+# Load .env for local use
 load_dotenv()
-client = OpenAI(api_key=os.getenv("VENICE_API_KEY"), base_url="https://api.venice.ai/api/v1")
 
 app = Flask(__name__)
 
@@ -23,27 +23,33 @@ session_data = {
     "max_output_tokens": 3337
 }
 
-# Ensure logs/sunshine directory exists
+# Ensure logs/sunshine directory exists (local only)
 LOG_DIR = "logs/sunshine"
-os.makedirs(LOG_DIR, exist_ok=True)
+if not os.getenv("VERCEL"):  # Only create locally, not on Vercel
+    os.makedirs(LOG_DIR, exist_ok=True)
 
-# Pricing in USD (5x actual cost)
+# Pricing in USD (5x actual cost) - Full list from your table
 PRICING = {
-    "llama-3.2-3b": {"input": 0.75 / 1000000, "output": 3.00 / 1000000},
-    "qwen-2.5-coder-32b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},
-    "qwen-2.5-qwq-32b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},
-    "mistral-31-24b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},
-    "llama-3.3-70b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},
-    "dolphin-2.9.2-qwen2-72b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},
-    "deepseek-r1-671b": {"input": 17.50 / 1000000, "output": 70.00 / 1000000},
-    "qwen-2.5-vl": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},
-    "llama-3.1-405b": {"input": 7.50 / 1000000, "output": 30.00 / 1000000}
+    "llama-3.2-3b": {"input": 0.75 / 1000000, "output": 3.00 / 1000000},  # $0.15/M input, $0.60/M output
+    "qwen-2.5-coder-32b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},  # $0.50/M input, $2.00/M output
+    "qwen-2.5-qwq-32b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},  # Assumed same as Qwen 2.5 Coder
+    "mistral-31-24b": {"input": 2.50 / 1000000, "output": 10.00 / 1000000},  # $0.50/M input, $2.00/M output
+    "llama-3.3-70b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},  # $0.70/M input, $2.80/M output
+    "dolphin-2.9.2-qwen2-72b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},  # $0.70/M input, $2.80/M output
+    "deepseek-r1-70b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},  # Assumed same as 70B tier
+    "qwen-2.5-vl-72b": {"input": 3.50 / 1000000, "output": 14.00 / 1000000},  # $0.70/M input, $2.80/M output
+    "llama-3.1-405b": {"input": 7.50 / 1000000, "output": 30.00 / 1000000},  # $1.50/M input, $6.00/M output
+    "deepseek-r1-671b": {"input": 17.50 / 1000000, "output": 70.00 / 1000000}  # $3.50/M input, $14.00/M output
 }
 
 # Load models from models.json
 def load_models():
-    with open("models.json", "r", encoding="utf-8") as f:
-        return json.load(f)["models"]
+    try:
+        with open("models.json", "r", encoding="utf-8") as f:
+            return [m for m in json.load(f)["models"] if m.get("model_extra", {}).get("type") == "text"]
+    except Exception as e:
+        print(f"Error loading models.json: {e}")
+        return []
 
 # Get model details by ID
 def get_model_info(model_id, models):
@@ -57,7 +63,7 @@ def estimate_tokens(text):
 
 def split_into_chunks(text, num_chunks, max_context_tokens, prompt_tokens, message_overhead):
     total_tokens = estimate_tokens(text)
-    target_tokens_per_chunk = (total_tokens + num_chunks - 1) // num_chunks
+    target_tokens_per_chunk = total_tokens // num_chunks
     chunk_size_tokens = min(target_tokens_per_chunk, max_context_tokens - (prompt_tokens + message_overhead + 150))
     chunk_size_chars = chunk_size_tokens * 4
     
@@ -67,16 +73,15 @@ def split_into_chunks(text, num_chunks, max_context_tokens, prompt_tokens, messa
         if start >= len(text):
             break
         end = min(start + chunk_size_chars, len(text))
-        # Find paragraph break near target end
         while end > start and text[end-1] not in ['\n', '.', '!', '?']:
             end -= 1
-        if end == start:  # No break found, use full size
+        if end == start:
             end = min(start + chunk_size_chars, len(text))
         chunks.append(text[start:end])
         start = end
     return chunks
 
-def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max_context_tokens, max_output_tokens):
+def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max_context_tokens, max_output_tokens, api_key):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     system_prompt = f"{prompt} Please ensure output does not exceed {max_output_tokens} tokens."
     user_content = f"Potato {chunk_num}/{total_chunks} (size: {estimate_tokens(chunk)} tokens):\n{chunk}"
@@ -89,22 +94,19 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max
         "temperature": 0.3,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "max_completion_tokens": max_output_tokens,
-        "timestamp": datetime.now().isoformat()
+        "max_completion_tokens": max_output_tokens
     }
-    request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
-    with open(request_file, "w", encoding="utf-8") as f:
-        json.dump(request_data, f, indent=2)
+    if not os.getenv("VERCEL"):  # Local logging only
+        request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
+        try:
+            with open(request_file, "w", encoding="utf-8") as f:
+                json.dump(request_data, f, indent=2)
+        except Exception as e:
+            print(f"Error writing request log: {e}")
     
     try:
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=request_data["messages"],
-            temperature=0.3,
-            stream=True,
-            stream_options={"include_usage": True},
-            max_completion_tokens=max_output_tokens
-        )
+        client = OpenAI(api_key=api_key, base_url="https://api.venice.ai/api/v1")
+        response = client.chat.completions.create(**request_data)
         full_response = ""
         usage = None
         first_chunk = True
@@ -121,9 +123,10 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max
                     "timestamp": datetime.now().isoformat(),
                     "status": "stopped"
                 }
-                response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
-                with open(response_file, "w", encoding="utf-8") as f:
-                    json.dump(response_data, f, indent=2)
+                if not os.getenv("VERCEL"):
+                    response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
+                    with open(response_file, "w", encoding="utf-8") as f:
+                        json.dump(response_data, f, indent=2)
                 yield "Process stopped by user.\n"
                 break
             if chunk.choices and chunk.choices[0].delta.content:
@@ -151,23 +154,25 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id, max
                 "usage": usage or {"prompt_tokens": "unknown", "completion_tokens": "unknown", "total_tokens": "unknown"},
                 "timestamp": datetime.now().isoformat()
             }
-            response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
-            with open(response_file, "w", encoding="utf-8") as f:
-                json.dump(response_data, f, indent=2)
+            if not os.getenv("VERCEL"):
+                response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
+                with open(response_file, "w", encoding="utf-8") as f:
+                    json.dump(response_data, f, indent=2)
     except Exception as e:
         error_msg = f"Potato {chunk_num}: Error - {str(e)}\n\n"
-        error_data = {
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-        error_file = os.path.join(LOG_DIR, f"{timestamp}_venice_error.json")
-        with open(error_file, "w", encoding="utf-8") as f:
-            json.dump(error_data, f, indent=2)
+        if not os.getenv("VERCEL"):
+            error_data = {
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+            error_file = os.path.join(LOG_DIR, f"{timestamp}_venice_error.json")
+            with open(error_file, "w", encoding="utf-8") as f:
+                json.dump(error_data, f, indent=2)
         yield error_msg
 
 @app.route("/", methods=["GET"])
 def index():
-    models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
+    models = load_models()
     model_ids = [m["id"] for m in models]
     default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
     filename = session_data["filename"] if session_data["filename"] else "No file chosen"
@@ -177,7 +182,7 @@ def index():
 
 @app.route("/estimate", methods=["GET", "POST"])
 def estimate():
-    models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
+    models = load_models()
     model_ids = [m["id"] for m in models]
     default_model = "mistral-31-24b" if "mistral-31-24b" in model_ids else "llama-3.2-3b"
     
@@ -191,6 +196,12 @@ def estimate():
     prompt = request.form.get("prompt", "")
     model_id = request.form.get("model", default_model)
     max_output_tokens = int(request.form.get("max_output_tokens", 3337))
+    api_key = request.form.get("api_key", os.getenv("VENICE_API_KEY", "")) if not os.getenv("VERCEL") else request.form.get("api_key", "")
+    if not api_key:
+        return render_template("index.html", models=model_ids, default_model=default_model, 
+                             estimate="Please provide an API key", filename="No file chosen", 
+                             prompt=prompt, max_output_tokens=max_output_tokens)
+    
     session_data["selected_model"] = model_id
     session_data["prompt"] = prompt
     session_data["max_output_tokens"] = max_output_tokens
@@ -232,13 +243,17 @@ def estimate():
 
 @app.route("/process", methods=["POST"])
 def process():
-    models = [m for m in load_models() if m.get("model_extra", {}).get("type") == "text"]
+    models = load_models()
     model_ids = [m["id"] for m in models]
     
     file = request.files.get("file")
     prompt = request.form.get("prompt", "")
     model_id = request.form.get("model", session_data.get("selected_model", "mistral-31-24b"))
     max_output_tokens = int(request.form.get("max_output_tokens", 3337))
+    api_key = request.headers.get("X-API-Key", request.form.get("api_key", os.getenv("VENICE_API_KEY", "")))
+    if not api_key:
+        return "No API key provided", 400
+    
     session_data["prompt"] = prompt
     session_data["max_output_tokens"] = max_output_tokens
     
@@ -281,7 +296,7 @@ def process():
             output = f"Planting potato {i} of {num_chunks}...\n"
             yield output
             session_data["results"][task_id]["output"] += output
-            for streamed_output in process_chunk(chunk, prompt, model_id, i, num_chunks, task_id, max_context_tokens, max_output_tokens):
+            for streamed_output in process_chunk(chunk, prompt, model_id, i, num_chunks, task_id, max_context_tokens, max_output_tokens, api_key):
                 if not session_data["running"]:
                     yield "Process stopped by user.\n"
                     break
