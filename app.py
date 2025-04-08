@@ -41,14 +41,21 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
         "temperature": 0.3,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()  # For logging only, not API
     }
     request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
     with open(request_file, "w", encoding="utf-8") as f:
         json.dump(request_data, f, indent=2)
     
     try:
-        response = client.chat.completions.create(**request_data)
+        # Only pass valid API parameters
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=request_data["messages"],
+            temperature=0.3,
+            stream=True,
+            stream_options={"include_usage": True}
+        )
         buffer = ""
         full_response = ""
         usage = None
