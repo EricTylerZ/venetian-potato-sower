@@ -11,8 +11,9 @@
     <form method="post" enctype="multipart/form-data">
         <label for="file">Upload CSV or .txt file:</label>
         <input type="file" id="file" name="file" accept=".csv,.txt"><br>
+        <input type="hidden" name="filename" value="{{ filename }}">
         <label for="prompt">Analysis Prompt:</label>
-        <textarea id="prompt" name="prompt" rows="4" cols="50" placeholder="e.g., Parse this chat log into an abridged prompt history...">{{ request.form.get('prompt', '') }}</textarea><br>
+        <textarea id="prompt" name="prompt" rows="4" cols="50" placeholder="e.g., Parse this file and list every time the word 'Eric' is used...">{{ request.form.get('prompt', '') }}</textarea><br>
         <label for="model">Select Model:</label>
         <select id="model" name="model">
             {% for model in models %}

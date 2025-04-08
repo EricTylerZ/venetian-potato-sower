@@ -13,4 +13,4 @@ A web-based tool to analyze large files (presently .txt and csv) across multiple
 - Input a custom prompt for analysis.
 - Select from multiple Venice.ai models (e.g., 'mistral-31-24b', `llama-3.2-3b`).
 - Estimate processing cost based on file size and model pricing.
-- Process files with chunking for large logs, returning a combined prompt history.
+- Process files with chunking for large logs, returning a combined set of mashed potatoes.
