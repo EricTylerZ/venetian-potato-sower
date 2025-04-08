@@ -107,24 +107,24 @@ def index():
             estimated_cost = total_tokens * cost_per_token
             estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} to run this, with an estimated cost of ${estimated_cost:.2f}"
         
-        elif action == "process":
-            task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-            session_data["task_id"] = task_id
-            session_data["results"][task_id] = {"status": "running", "output": ""}
-            
-            def generate():
-                yield f"Starting to plant {num_chunks} potato{'s' if num_chunks != 1 else ''}...\n\n"
-                chunks = [chat_text[i:i+chunk_size] for i in range(0, len(chat_text), chunk_size)]
-                for i, chunk in enumerate(chunks, 1):
-                    yield f"Planting potato {i} of {num_chunks}...\n"
-                    result = process_chunk(chunk, prompt, model_id, i, num_chunks, task_id)
-                    session_data["results"][task_id]["output"] += result
-                    yield result
-                    time.sleep(0.1)  # Small delay for streaming effect
-                session_data["results"][task_id]["status"] = "complete"
-                yield f"\nMashing complete! Task ID: {task_id}\n"
-            
-            return Response(stream_with_context(generate()), mimetype="text/plain")
+elif action == "process":
+    task_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_data["task_id"] = task_id
+    session_data["results"][task_id] = {"status": "running", "output": ""}
+    
+    def generate():
+        yield f"Starting to plant {num_chunks} potato{'s' if num_chunks != 1 else ''}...\n\n"
+        chunks = [chat_text[i:i+chunk_size] for i in range(0, len(chat_text), chunk_size)]
+        for i, chunk in enumerate(chunks, 1):
+            yield f"Planting potato {i} of {num_chunks}...\n"
+            result = process_chunk(chunk, prompt, model_id, i, num_chunks, task_id)
+            session_data["results"][task_id]["output"] += result
+            yield result
+            time.sleep(0.1)  # Small delay for streaming effect
+        session_data["results"][task_id]["status"] = "complete"
+        yield f"\nMashing complete! Task ID: {task_id}\n"
+    
+    return Response(generate(), mimetype="text/plain", headers={"X-Accel-Buffering": "no"})
 
     return render_template("index.html", models=model_ids, default_model=default_model, 
                          estimate=estimate, filename=session_data["filename"])
