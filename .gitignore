@@ -1,0 +1,7 @@
+.env
+venv/
+myenv/
+__pycache__/
+
+#internal tools for convenience, uncessesary for github
+texts-to-paste 
