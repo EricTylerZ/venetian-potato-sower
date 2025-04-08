@@ -39,6 +39,8 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
             {"role": "user", "content": f"Potato {chunk_num}/{total_chunks}:\n{chunk}"}
         ],
         "temperature": 0.3,
+        "stream": True,
+        "stream_options": {"include_usage": True},
         "timestamp": datetime.now().isoformat()
     }
     request_file = os.path.join(LOG_DIR, f"{timestamp}_venice_request.json")
@@ -46,31 +48,42 @@ def process_chunk(chunk, prompt, model_id, chunk_num, total_chunks, task_id):
         json.dump(request_data, f, indent=2)
     
     try:
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=request_data["messages"],
-            temperature=0.3,
-            stream=True  # Enable streaming for real-time responses
-        )
+        response = client.chat.completions.create(**request_data)
+        buffer = ""
         full_response = ""
+        usage = None
+        
         for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
+                buffer += content
                 full_response += content
-                yield f"Potato {chunk_num}: Streaming...\n{content}\n"
+                if any(buffer.endswith(punct) for punct in [".", "!", "?"]):  # Buffer until sentence end
+                    yield f"Potato {chunk_num}: Streaming...\n{buffer.strip()}\n"
+                    buffer = ""
+            if hasattr(chunk, "usage") and chunk.usage:  # Final chunk with usage
+                usage = {
+                    "prompt_tokens": chunk.usage.prompt_tokens,
+                    "completion_tokens": chunk.usage.completion_tokens,
+                    "total_tokens": chunk.usage.total_tokens
+                }
+        if buffer:  # Yield remaining buffer
+            yield f"Potato {chunk_num}: Streaming...\n{buffer.strip()}\n"
+        
+        yield f"Potato {chunk_num}: Done\n{full_response}\n\n"
+        
         response_data = {
-            "response": full_response,
-            "usage": {
-                "prompt_tokens": getattr(response, "usage", {}).get("prompt_tokens", "unknown"),
-                "completion_tokens": getattr(response, "usage", {}).get("completion_tokens", "unknown"),
-                "total_tokens": getattr(response, "usage", {}).get("total_tokens", "unknown")
-            },
+            "id": chunk.id if hasattr(chunk, "id") else "unknown",
+            "object": chunk.object if hasattr(chunk, "object") else "chat.completion.chunk",
+            "created": chunk.created if hasattr(chunk, "created") else int(time.time()),
+            "model": model_id,
+            "choices": [{"message": {"role": "assistant", "content": full_response}}],
+            "usage": usage or {"prompt_tokens": "unknown", "completion_tokens": "unknown", "total_tokens": "unknown"},
             "timestamp": datetime.now().isoformat()
         }
         response_file = os.path.join(LOG_DIR, f"{timestamp}_venice_response.json")
         with open(response_file, "w", encoding="utf-8") as f:
             json.dump(response_data, f, indent=2)
-        yield f"Potato {chunk_num}: Done\n{full_response}\n\n"
     except Exception as e:
         error_msg = f"Potato {chunk_num}: Error - {str(e)}\n\n"
         error_data = {
@@ -123,7 +136,7 @@ def estimate():
     total_tokens = file_size // 4 + num_chunks * 150
     cost_per_token = 0.0001  # Placeholder
     estimated_cost = total_tokens * cost_per_token
-    estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} to run this, with an estimated cost of ${estimated_cost:.2f}"
+    estimate = f"We’ll plant {num_chunks} potato{'s' if num_chunks != 1 else ''} costing ~${estimated_cost:.2f}"
     
     return render_template("index.html", models=model_ids, default_model=default_model, 
                          estimate=estimate, filename=session_data["filename"], prompt=prompt)
